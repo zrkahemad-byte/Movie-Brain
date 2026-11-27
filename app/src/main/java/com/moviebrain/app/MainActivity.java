@@ -386,7 +386,7 @@ public class MainActivity extends Activity {
                         });
                         String script = buildInjectedScript(prompt, orientation, "", isExtend);
                         if (!script.isEmpty()) {
-                            v.evaluateJavascript(script, null);
+                            view.evaluateJavascript(script, null);
                         }
                     }
                 });
