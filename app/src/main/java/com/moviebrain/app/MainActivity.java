@@ -330,5 +330,117 @@ public class MainActivity extends Activity {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(svc);
                 } else {
-                    startService(
-                        
+                    startService(svc);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void updateAutomation(String statusText) {
+            if (!automationActive) return;
+            mainHandler.post(() -> {
+                Intent svc = new Intent(MainActivity.this, AutomationService.class);
+                svc.putExtra("status", statusText == null ? "Running..." : statusText);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(svc);
+                } else {
+                    startService(svc);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void stopAutomation() {
+            automationActive = false;
+            mainHandler.post(() -> {
+                stopService(new Intent(MainActivity.this, AutomationService.class));
+            });
+        }
+
+        @JavascriptInterface
+        public void keepAwake(boolean enable) {
+            mainHandler.post(() -> {
+                if (enable) {
+                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                } else {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void toSite() {
+            showSiteView();
+        }
+
+        @JavascriptInterface
+        public String generate(String prompt, String orientation, boolean isExtend) {
+            showSiteView();
+            String script = buildInjectedScript(prompt, orientation, "", isExtend);
+            if (script.isEmpty()) {
+                return "missing_inject_script";
+            }
+            mainHandler.post(() -> siteWebView.evaluateJavascript(script, null));
+            return "injected";
+        }
+
+        @JavascriptInterface
+        public String generateReload(String url, String prompt, String orientation, boolean isExtend) {
+            showSiteView();
+            String targetUrl = (url == null || url.trim().isEmpty()) ? lastSiteUrl : url.trim();
+            saveSiteUrl(targetUrl);
+            mainHandler.post(() -> {
+                siteWebView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageFinished(WebView view, String finishedUrl) {
+                        super.onPageFinished(view, finishedUrl);
+                        saveSiteUrl(finishedUrl);
+                        view.setWebViewClient(new WebViewClient() {
+                            @Override
+                            public void onPageFinished(WebView v, String u) {
+                                super.onPageFinished(v, u);
+                                saveSiteUrl(u);
+                            }
+                        });
+                        String script = buildInjectedScript(prompt, orientation, "", isExtend);
+                        if (!script.isEmpty()) {
+                            view.evaluateJavascript(script, null);
+                        }
+                    }
+                });
+                siteWebView.loadUrl(targetUrl);
+            });
+            return "reloading";
+        }
+
+        @JavascriptInterface
+        public void ring(int count, int durationMs) {
+            playBeep(count);
+        }
+
+        @JavascriptInterface
+        public void notifyAlert(String title, String message) {
+            mainHandler.post(() -> {
+                if (isFinishing()) return;
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle(title == null ? "Alert" : title)
+                        .setMessage(message == null ? "" : message)
+                        .setPositiveButton("OK", null)
+                        .show();
+            });
+        }
+    }
+
+    private class SiteBotBridge {
+
+        @JavascriptInterface
+        public void report(String status, String detail) {
+            notifyControllerBot(status, detail);
+        }
+
+        @JavascriptInterface
+        public void frameReady() {
+            notifyControllerFrame();
+        }
+    }
+                                    }
