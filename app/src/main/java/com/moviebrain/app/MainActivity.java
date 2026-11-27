@@ -33,7 +33,8 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST = 1001;
-    private static final String DEFAULT_SITE_URL = "https://www.google.com";
+    private static final String DEFAULT_SITE_URL = "https://theresanaiforthat.com/@taaft/video-generator/?ref=header";
+    
     private static final String ALERT_CHANNEL_ID = "movie_brain_alerts";
 
     private FrameLayout rootContainer;
