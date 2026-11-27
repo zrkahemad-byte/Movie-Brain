@@ -34,8 +34,9 @@ public class MainActivity extends Activity {
 
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final String DEFAULT_SITE_URL = "https://theresanaiforthat.com/@taaft/video-generator/?ref=header";
-    
     private static final String ALERT_CHANNEL_ID = "movie_brain_alerts";
+    private static final String PREFS_NAME = "movie_brain_prefs";
+    private static final String KEY_LAST_URL = "last_site_url";
 
     private FrameLayout rootContainer;
     private WebView controllerWebView;
@@ -63,9 +64,24 @@ public class MainActivity extends Activity {
         rootContainer.addView(controllerWebView);
         setContentView(rootContainer);
 
+        String savedUrl = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getString(KEY_LAST_URL, DEFAULT_SITE_URL);
+        lastSiteUrl = (savedUrl == null || savedUrl.trim().isEmpty()) ? DEFAULT_SITE_URL : savedUrl;
+
         showControllerView();
         controllerWebView.loadUrl("file:///android_asset/index.html");
         siteWebView.loadUrl(lastSiteUrl);
+    }
+
+    private void saveSiteUrl(String url) {
+        if (url == null || url.trim().isEmpty()) return;
+        String clean = url.trim();
+        if (clean.contains("google.")) return;
+        lastSiteUrl = clean;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putString(KEY_LAST_URL, lastSiteUrl)
+                .apply();
     }
 
     private WebView createConfiguredWebView(boolean isController) {
@@ -125,8 +141,8 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (!isController && url != null && !url.isEmpty()) {
-                    lastSiteUrl = url;
+                if (!isController) {
+                    saveSiteUrl(url);
                 }
             }
         });
@@ -314,116 +330,5 @@ public class MainActivity extends Activity {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(svc);
                 } else {
-                    startService(svc);
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void updateAutomation(String statusText) {
-            if (!automationActive) return;
-            mainHandler.post(() -> {
-                Intent svc = new Intent(MainActivity.this, AutomationService.class);
-                svc.putExtra("status", statusText == null ? "Running..." : statusText);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(svc);
-                } else {
-                    startService(svc);
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void stopAutomation() {
-            automationActive = false;
-            mainHandler.post(() -> {
-                stopService(new Intent(MainActivity.this, AutomationService.class));
-            });
-        }
-
-        @JavascriptInterface
-        public void keepAwake(boolean enable) {
-            mainHandler.post(() -> {
-                if (enable) {
-                    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                } else {
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                }
-            });
-        }
-
-        @JavascriptInterface
-        public void toSite() {
-            showSiteView();
-        }
-
-        @JavascriptInterface
-        public String generate(String prompt, String orientation, boolean isExtend) {
-            showSiteView();
-            String script = buildInjectedScript(prompt, orientation, "", isExtend);
-            if (script.isEmpty()) {
-                return "missing_inject_script";
-            }
-            mainHandler.post(() -> siteWebView.evaluateJavascript(script, null));
-            return "injected";
-        }
-
-        @JavascriptInterface
-        public String generateReload(String url, String prompt, String orientation, boolean isExtend) {
-            showSiteView();
-            String targetUrl = (url == null || url.trim().isEmpty()) ? lastSiteUrl : url.trim();
-            lastSiteUrl = targetUrl;
-            mainHandler.post(() -> {
-                siteWebView.setWebViewClient(new WebViewClient() {
-                    @Override
-                    public void onPageFinished(WebView view, String finishedUrl) {
-                        super.onPageFinished(view, finishedUrl);
-                        view.setWebViewClient(new WebViewClient() {
-                            @Override
-                            public void onPageFinished(WebView v, String u) {
-                                super.onPageFinished(v, u);
-                                if (u != null && !u.isEmpty()) lastSiteUrl = u;
-                            }
-                        });
-                        String script = buildInjectedScript(prompt, orientation, "", isExtend);
-                        if (!script.isEmpty()) {
-                            view.evaluateJavascript(script, null);
-                        }
-                    }
-                });
-                siteWebView.loadUrl(targetUrl);
-            });
-            return "reloading";
-        }
-
-        @JavascriptInterface
-        public void ring(int count, int durationMs) {
-            playBeep(count);
-        }
-
-        @JavascriptInterface
-        public void notifyAlert(String title, String message) {
-            mainHandler.post(() -> {
-                if (isFinishing()) return;
-                new AlertDialog.Builder(MainActivity.this)
-                        .setTitle(title == null ? "Alert" : title)
-                        .setMessage(message == null ? "" : message)
-                        .setPositiveButton("OK", null)
-                        .show();
-            });
-        }
-    }
-
-    private class SiteBotBridge {
-
-        @JavascriptInterface
-        public void report(String status, String detail) {
-            notifyControllerBot(status, detail);
-        }
-
-        @JavascriptInterface
-        public void frameReady() {
-            notifyControllerFrame();
-        }
-    }
-}
+                    startService(
+                        
