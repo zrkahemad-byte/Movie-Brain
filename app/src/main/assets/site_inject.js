@@ -12,6 +12,16 @@
     } catch (e) {}
   }
 
+  function isVisibleEnabled(el) {
+    if (!el || el.disabled) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === "none" || style.visibility === "hidden" || parseFloat(style.opacity) === 0) {
+      return false;
+    }
+    const r = el.getBoundingClientRect();
+    return r.width > 10 && r.height > 10;
+  }
+
   function findPromptInput() {
     const candidates = Array.from(document.querySelectorAll("textarea, input[type='text'], [contenteditable='true']"));
     return candidates.find(el => {
@@ -23,6 +33,8 @@
   function setValue(el, val) {
     el.focus();
     if (el.isContentEditable) {
+      el.textContent = "";
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, data: "" }));
       el.textContent = val;
       el.dispatchEvent(new InputEvent("input", { bubbles: true, data: val }));
     } else {
@@ -35,11 +47,12 @@
     }
   }
 
-  function clickGenerate() {
-    const btns = Array.from(document.querySelectorAll("button, [role='button']"));
-    const target = btns.find(b => {
-      const t = (b.innerText || b.textContent || "").trim().toLowerCase();
-      return !b.disabled && (t.includes("generate") || t.includes("create") || t.includes("submit") || t.includes("send"));
+  function tryClickExtend() {
+    const els = Array.from(document.querySelectorAll("button, [role='button'], a, span, div"));
+    const target = els.find(el => {
+      if (!isVisibleEnabled(el)) return false;
+      const t = (el.innerText || el.textContent || "").trim().toLowerCase();
+      return t === "extend" || t.includes("extend clip") || t.includes("extend video") || t.includes("continue");
     });
     if (target) {
       target.click();
@@ -48,13 +61,21 @@
     return false;
   }
 
-  try {
-    const bodyText = (document.body && document.body.innerText || "").toLowerCase();
-    if (bodyText.includes("captcha") || bodyText.includes("verify you are human")) {
-      report("captcha", "Captcha ya verification dikh raha hai.");
-      return;
+  function clickGenerate() {
+    const btns = Array.from(document.querySelectorAll("button, [role='button']"));
+    const target = btns.find(b => {
+      if (!isVisibleEnabled(b)) return false;
+      const t = (b.innerText || b.textContent || "").trim().toLowerCase();
+      return t.includes("generate") || t.includes("extend") || t.includes("create") || t.includes("submit") || t.includes("send");
+    });
+    if (target) {
+      target.click();
+      return true;
     }
+    return false;
+  }
 
+  function runFillAndSubmit(extendClicked) {
     const input = findPromptInput();
     if (!input) {
       report("waiting", "Page par prompt box nahi mila. Sahi page/tool kholo.");
@@ -66,11 +87,27 @@
     setTimeout(() => {
       const clicked = clickGenerate();
       if (clicked) {
-        report("started", (IS_EXTEND ? "Extend" : "New") + " [" + ORIENTATION + "] trigger ho gaya.");
+        const modeLabel = IS_EXTEND ? (extendClicked ? "Extend (button clicked)" : "Extend") : "New";
+        report("started", modeLabel + " [" + ORIENTATION + "] trigger ho gaya.");
       } else {
-        report("filled", "Prompt bhar diya gaya hai. Generate button manually ya selector se dabao.");
+        report("filled", "Prompt bhar diya gaya hai. Generate/Extend button manually dabao.");
       }
-    }, 500);
+    }, 600);
+  }
+
+  try {
+    const bodyText = (document.body && document.body.innerText || "").toLowerCase();
+    if (bodyText.includes("captcha") || bodyText.includes("verify you are human")) {
+      report("captcha", "Captcha ya verification dikh raha hai.");
+      return;
+    }
+
+    if (IS_EXTEND) {
+      const extClicked = tryClickExtend();
+      setTimeout(() => runFillAndSubmit(extClicked), extClicked ? 800 : 150);
+    } else {
+      runFillAndSubmit(false);
+    }
   } catch (err) {
     report("error", err && err.message ? err.message : "JS error");
   }
