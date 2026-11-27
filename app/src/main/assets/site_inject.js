@@ -22,12 +22,50 @@
     return r.width > 10 && r.height > 10;
   }
 
-  function findPromptInput() {
-    const candidates = Array.from(document.querySelectorAll("textarea, input[type='text'], [contenteditable='true']"));
-    return candidates.find(el => {
-      const r = el.getBoundingClientRect();
-      return r.width > 60 && r.height > 20 && !el.disabled && !el.readOnly;
+  function isSearchInput(el) {
+    const type = (el.getAttribute("type") || "").toLowerCase();
+    const name = (el.getAttribute("name") || "").toLowerCase();
+    const role = (el.getAttribute("role") || "").toLowerCase();
+    const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+    const ph = (el.getAttribute("placeholder") || "").toLowerCase();
+    if (type === "search" || role === "searchbox" || role === "combobox") return true;
+    if (name === "q" || name === "search" || name === "query") return true;
+    if (aria.includes("search") || ph.includes("search") || ph.includes("google")) return true;
+    return false;
+  }
+
+  function findButtonByText(keywords) {
+    const btns = Array.from(document.querySelectorAll("button, [role='button'], a"));
+    return btns.find(b => {
+      if (!isVisibleEnabled(b)) return false;
+      const t = (b.innerText || b.textContent || "").trim().toLowerCase();
+      return keywords.some(k => t.includes(k));
     }) || null;
+  }
+
+  function findPromptInput(forExtend) {
+    const areas = Array.from(document.querySelectorAll("textarea, [contenteditable='true']"));
+    const visibleAreas = areas.filter(el => {
+      if (!isVisibleEnabled(el) || el.readOnly || isSearchInput(el)) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 80 && r.height > 25;
+    });
+
+    if (forExtend) {
+      const extBox = visibleAreas.find(el => {
+        const ph = (el.getAttribute("placeholder") || "").toLowerCase();
+        return ph.includes("continues") || ph.includes("what happens") || ph.includes("next");
+      });
+      if (extBox) return extBox;
+    } else {
+      const newBox = visibleAreas.find(el => {
+        const ph = (el.getAttribute("placeholder") || "").toLowerCase();
+        return ph.includes("enter your prompt") || ph.includes("prompt");
+      });
+      if (newBox) return newBox;
+    }
+
+    return visibleAreas[0] || null;
   }
 
   function setValue(el, val) {
@@ -47,55 +85,36 @@
     }
   }
 
-  function tryClickExtend() {
-    const els = Array.from(document.querySelectorAll("button, [role='button'], a, span, div"));
-    const target = els.find(el => {
-      if (!isVisibleEnabled(el)) return false;
-      const t = (el.innerText || el.textContent || "").trim().toLowerCase();
-      return t === "extend" || t.includes("extend clip") || t.includes("extend video") || t.includes("continue");
-    });
-    if (target) {
-      target.click();
-      return true;
-    }
-    return false;
-  }
-
-  function clickGenerate() {
-    const btns = Array.from(document.querySelectorAll("button, [role='button']"));
-    const target = btns.find(b => {
-      if (!isVisibleEnabled(b)) return false;
-      const t = (b.innerText || b.textContent || "").trim().toLowerCase();
-      return t.includes("generate") || t.includes("extend") || t.includes("create") || t.includes("submit") || t.includes("send");
-    });
-    if (target) {
-      target.click();
-      return true;
-    }
-    return false;
-  }
-
-  function runFillAndSubmit(extendClicked) {
-    const input = findPromptInput();
+  function fillAndSubmit(forExtend) {
+    const input = findPromptInput(forExtend);
     if (!input) {
-      report("waiting", "Page par prompt box nahi mila. Sahi page/tool kholo.");
+      report("waiting", forExtend ? "Extend box nahi mila. Clip Done hone ka wait karo." : "Prompt box nahi mila.");
       return;
     }
 
     setValue(input, PROMPT);
 
     setTimeout(() => {
-      const clicked = clickGenerate();
-      if (clicked) {
-        const modeLabel = IS_EXTEND ? (extendClicked ? "Extend (button clicked)" : "Extend") : "New";
-        report("started", modeLabel + " [" + ORIENTATION + "] trigger ho gaya.");
+      const btn = forExtend
+        ? findButtonByText(["generate next part", "extend", "generate"])
+        : findButtonByText(["generate", "create", "submit"]);
+
+      if (btn) {
+        btn.click();
+        report("started", (forExtend ? "Generate next part" : "Generate") + " [" + ORIENTATION + "] click ho gaya.");
       } else {
-        report("filled", "Prompt bhar diya gaya hai. Generate/Extend button manually dabao.");
+        report("filled", "Prompt bhar gaya hai, submit button manually dabao.");
       }
     }, 600);
   }
 
   try {
+    const host = (location.hostname || "").toLowerCase();
+    if (!host || host.includes("google.")) {
+      report("waiting", "Google ya khali page khula hai. Apni target site open karo.");
+      return;
+    }
+
     const bodyText = (document.body && document.body.innerText || "").toLowerCase();
     if (bodyText.includes("captcha") || bodyText.includes("verify you are human")) {
       report("captcha", "Captcha ya verification dikh raha hai.");
@@ -103,10 +122,20 @@
     }
 
     if (IS_EXTEND) {
-      const extClicked = tryClickExtend();
-      setTimeout(() => runFillAndSubmit(extClicked), extClicked ? 800 : 150);
+      const extBox = findPromptInput(true);
+      if (extBox) {
+        fillAndSubmit(true);
+      } else {
+        const extBtn = findButtonByText(["extend video", "extend"]);
+        if (extBtn) {
+          extBtn.click();
+          setTimeout(() => fillAndSubmit(true), 700);
+        } else {
+          report("waiting", "'Extend video' button nahi mila. Clip complete hone ka wait karo.");
+        }
+      }
     } else {
-      runFillAndSubmit(false);
+      fillAndSubmit(false);
     }
   } catch (err) {
     report("error", err && err.message ? err.message : "JS error");
