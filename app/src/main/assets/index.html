@@ -202,7 +202,7 @@
 
       let item = null;
       if (lines.length) {
-        item = { prompt: lines[0], ori, mode: "extend" };
+        item = { prompt: lines[0], ori, mode: "new" };
         if (lines.length > 1) {
           lines.slice(1).forEach(extra => queue.push({ prompt: extra, ori, mode: "extend" }));
           pBox.value = "";
