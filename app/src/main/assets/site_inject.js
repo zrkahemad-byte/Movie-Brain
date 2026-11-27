@@ -22,15 +22,17 @@
     return r.width > 10 && r.height > 10;
   }
 
-  function isSearchInput(el) {
+  function isSearchOrToolCreatorInput(el) {
     const type = (el.getAttribute("type") || "").toLowerCase();
     const name = (el.getAttribute("name") || "").toLowerCase();
     const role = (el.getAttribute("role") || "").toLowerCase();
     const aria = (el.getAttribute("aria-label") || "").toLowerCase();
     const ph = (el.getAttribute("placeholder") || "").toLowerCase();
+
     if (type === "search" || role === "searchbox" || role === "combobox") return true;
     if (name === "q" || name === "search" || name === "query") return true;
     if (aria.includes("search") || ph.includes("search") || ph.includes("google")) return true;
+    if (ph.includes("dog name") || ph.includes("tool")) return true;
     return false;
   }
 
@@ -46,7 +48,7 @@
   function findPromptInput(forExtend) {
     const areas = Array.from(document.querySelectorAll("textarea, [contenteditable='true']"));
     const visibleAreas = areas.filter(el => {
-      if (!isVisibleEnabled(el) || el.readOnly || isSearchInput(el)) return false;
+      if (!isVisibleEnabled(el) || el.readOnly || isSearchOrToolCreatorInput(el)) return false;
       const r = el.getBoundingClientRect();
       return r.width > 80 && r.height > 25;
     });
@@ -88,7 +90,7 @@
   function fillAndSubmit(forExtend) {
     const input = findPromptInput(forExtend);
     if (!input) {
-      report("waiting", forExtend ? "Extend box nahi mila. Clip Done hone ka wait karo." : "Prompt box nahi mila.");
+      report("waiting", forExtend ? "Extend box nahi mila. Clip Done hone ka wait karo." : "Video prompt box nahi mila.");
       return;
     }
 
@@ -110,12 +112,23 @@
 
   try {
     const host = (location.hostname || "").toLowerCase();
+    const path = (location.pathname || "").toLowerCase();
+    const bodyText = (document.body && document.body.innerText || "").toLowerCase();
+
     if (!host || host.includes("google.")) {
-      report("waiting", "Google ya khali page khula hai. Apni target site open karo.");
+      report("waiting", "Google ya khali page khula hai. Apni video tool site kholo.");
       return;
     }
 
-    const bodyText = (document.body && document.body.innerText || "").toLowerCase();
+    if (
+      path.includes("/create") ||
+      bodyText.includes("3. tool prompt") ||
+      bodyText.includes("4. tool visibility")
+    ) {
+      report("waiting", "Tool Creator page khula hai — '3. Tool prompt' mein paste nahi kiya. Video generator page par jao.");
+      return;
+    }
+
     if (bodyText.includes("captcha") || bodyText.includes("verify you are human")) {
       report("captcha", "Captcha ya verification dikh raha hai.");
       return;
